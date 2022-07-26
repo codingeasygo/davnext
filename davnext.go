@@ -12,6 +12,7 @@ import (
 	"net/http/httputil"
 	"net/url"
 	"os"
+	"path/filepath"
 	"regexp"
 	"strings"
 
@@ -118,6 +119,18 @@ func NewDir(base string, modify bool) (dir *Dir) {
 		Dir:    webdav.Dir(base),
 		Modify: modify,
 	}
+	return
+}
+
+func (d *Dir) OpenFile(ctx context.Context, name string, flag int, perm os.FileMode) (file webdav.File, err error) {
+	dir := filepath.Dir(name)
+	if _, err = os.Stat(dir); os.IsNotExist(err) {
+		err = os.MkdirAll(dir, os.ModePerm)
+		if err != nil {
+			return
+		}
+	}
+	file, err = d.Dir.OpenFile(ctx, name, flag|os.O_CREATE, perm)
 	return
 }
 
