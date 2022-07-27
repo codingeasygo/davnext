@@ -68,7 +68,6 @@ func (i *InterceptWriter) Header() http.Header {
 }
 
 func (i *InterceptWriter) Write(b []byte) (int, error) {
-	os.Stdout.Write(b)
 	if i.StatusCode == http.StatusNotFound {
 		return len(b), nil
 	}
@@ -123,14 +122,16 @@ func NewDir(base string, modify bool) (dir *Dir) {
 }
 
 func (d *Dir) OpenFile(ctx context.Context, name string, flag int, perm os.FileMode) (file webdav.File, err error) {
-	dir := filepath.Dir(name)
-	if _, err = os.Stat(dir); os.IsNotExist(err) {
-		err = os.MkdirAll(dir, os.ModePerm)
-		if err != nil {
-			return
-		}
+	dir := filepath.Dir(filepath.Join(string(d.Dir), name))
+	err = os.MkdirAll(dir, os.ModePerm)
+	if err != nil {
+		log.Printf("Local mkdir %v fail with %v\n", dir, err)
+		return
 	}
-	file, err = d.Dir.OpenFile(ctx, name, flag|os.O_CREATE, perm)
+	file, err = d.Dir.OpenFile(ctx, name, flag, perm)
+	if err != nil {
+		log.Printf("Local open %v fail with %v\n", name, err)
+	}
 	return
 }
 
@@ -220,10 +221,10 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		h.Dav.ServeHTTP(localWriter, r1)
 		h.proxy.ServeHTTP(remoteWriter, r2)
 		if localWriter.StatusCode != http.StatusMultiStatus {
-			log.Printf("Local process %v %v to %v is fault with %v", r.Method, r.URL, h.Next, localWriter.B.String())
+			log.Printf("Local process %v %v to %v is fail with %v", r.Method, r.URL, h.Next, localWriter.B.String())
 		}
 		if remoteWriter.StatusCode != http.StatusMultiStatus {
-			log.Printf("Next process %v %v to %v is fault with %v", r.Method, r.URL, h.Next, remoteWriter.B.String())
+			log.Printf("Next process %v %v to %v is fail with %v", r.Method, r.URL, h.Next, remoteWriter.B.String())
 		}
 		if localWriter.StatusCode != http.StatusMultiStatus && remoteWriter.StatusCode != http.StatusMultiStatus {
 			for k, v := range localWriter.H {
